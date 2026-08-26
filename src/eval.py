@@ -1,27 +1,48 @@
-"""Rough evaluation of the extraction pipeline against the hand-labeled
-sample set. This is a proof-of-concept sanity check, not a rigorous metric:
-it checks whether the model flagged *any* span in a sentence with the
-correct technique (sentence-level accuracy), and separately whether it
-stayed quiet on sentences with no propaganda technique (specificity).
+"""Rough evaluation of the extraction pipeline against the real labeled
+spans in oversimplification_data.csv (SemEval-derived propaganda-technique
+annotations). This is a proof-of-concept sanity check, not a rigorous
+metric: each row's `span_text` is used directly as a short input, and we
+check whether the model flagged *any* extraction with the correct
+technique. The dataset has no explicit non-propaganda ("none") examples,
+so this only measures recall/technique-confusion, not false-positive rate.
 """
 
 import csv
+import random
 from pathlib import Path
 
+from .codebook import CSV_TECHNIQUE_TO_KEY
 from .prompting import ParseError, build_chat_messages, parse_extractions
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "sample_labeled_examples.csv"
+DATA_PATH = Path(__file__).resolve().parent.parent / "oversimplification_data.csv"
 
 
-def load_labeled_examples(path: Path = DATA_PATH) -> list[dict]:
+def load_labeled_examples(path: Path = DATA_PATH, sample_size: int | None = None, seed: int = 0) -> list[dict]:
+    """Load rows from oversimplification_data.csv, mapping each row's CSV
+    technique label to the internal codebook key. Rows with an unrecognized
+    technique label are skipped. Pass `sample_size` to randomly subsample
+    (useful since a local 8B model is slow, and the full file has ~390 rows)."""
     with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        rows = list(csv.DictReader(f))
+
+    examples = []
+    for row in rows:
+        key = CSV_TECHNIQUE_TO_KEY.get(row["technique"])
+        if key is None:
+            continue
+        examples.append({"id": row["article_id"], "text": row["span_text"], "technique": key})
+
+    if sample_size is not None and sample_size < len(examples):
+        rng = random.Random(seed)
+        examples = rng.sample(examples, sample_size)
+
+    return examples
 
 
 def evaluate(generate_fn, examples: list[dict] | None = None, max_retries: int = 2) -> dict:
     """`generate_fn(messages: list[dict]) -> str` should call the LLM and
     return its raw text response for the given chat messages."""
-    examples = examples or load_labeled_examples()
+    examples = examples if examples is not None else load_labeled_examples()
 
     correct = 0
     wrong_technique = 0

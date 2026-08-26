@@ -1,6 +1,7 @@
-"""Codebook for a 7-technique subset of the SemEval / Da San Martino et al.
-propaganda taxonomy. Each entry gives the definition used for annotation and
-the few-shot examples fed to the LLM prompt.
+"""Codebook for a 3-technique subset of the SemEval / Da San Martino et al.
+propaganda taxonomy, matching the techniques present in
+`oversimplification_data.csv`. Each entry gives the definition used for
+annotation and the few-shot examples fed to the LLM prompt.
 
 Definitions are paraphrased from:
   Da San Martino et al., "Fine-Grained Analysis of Propaganda in News
@@ -19,43 +20,16 @@ class Technique:
     negative_examples: list[str] = field(default_factory=list)
 
 
+# Maps the technique labels used in oversimplification_data.csv to the
+# internal codebook keys.
+CSV_TECHNIQUE_TO_KEY: dict[str, str] = {
+    "Causal_Oversimplification": "causal_oversimplification",
+    "Black-and-White_Fallacy": "black_and_white",
+    "Thought-terminating_Cliches": "thought_terminating_cliche",
+}
+
+
 CODEBOOK: dict[str, Technique] = {
-    "name_calling": Technique(
-        key="name_calling",
-        name="Name calling or labeling",
-        definition=(
-            "Labeling the object of the propaganda campaign as something the "
-            "target audience fears, hates, finds undesirable, or loves and "
-            "praises, without argument."
-        ),
-        positive_examples=[
-            "The so-called 'reformer' is nothing but a corrupt puppet.",
-            "These radical extremists want to destroy our way of life.",
-            "Our brave patriots stood firm against the tyrants.",
-        ],
-        negative_examples=[
-            "The senator voted against the bill on Tuesday.",
-            "Critics argue the policy will raise costs by 4%.",
-        ],
-    ),
-    "exaggeration_minimization": Technique(
-        key="exaggeration_minimization",
-        name="Exaggeration or minimization",
-        definition=(
-            "Representing something in an excessive manner (making it larger, "
-            "better, or worse than it is), or minimizing it (making it seem "
-            "less important or smaller than it actually is)."
-        ),
-        positive_examples=[
-            "This is the single greatest catastrophe in human history.",
-            "It was just a minor scuffle, nothing to worry about at all.",
-            "Millions upon millions will suffer if this law passes.",
-        ],
-        negative_examples=[
-            "The storm caused $2 million in damage across three counties.",
-            "Turnout was slightly lower than in the previous election.",
-        ],
-    ),
     "causal_oversimplification": Technique(
         key="causal_oversimplification",
         name="Causal oversimplification",
@@ -72,22 +46,6 @@ CODEBOOK: dict[str, Technique] = {
         negative_examples=[
             "Economists point to several factors behind the slowdown, "
             "including trade policy, energy prices, and consumer demand.",
-        ],
-    ),
-    "slogans": Technique(
-        key="slogans",
-        name="Slogans",
-        definition=(
-            "A brief, striking, memorable phrase, often used as an emotional "
-            "appeal, that may include labeling or stereotyping."
-        ),
-        positive_examples=[
-            "Build the wall!",
-            "Take back our country!",
-            "Justice for all, corruption for none.",
-        ],
-        negative_examples=[
-            "The committee will reconvene next Thursday to review the draft.",
         ],
     ),
     "black_and_white": Technique(
@@ -123,27 +81,6 @@ CODEBOOK: dict[str, Technique] = {
         ],
         negative_examples=[
             "The report outlines three possible explanations for the delay.",
-        ],
-    ),
-    "reductio_ad_hitlerum": Technique(
-        key="reductio_ad_hitlerum",
-        name="Reductio ad Hitlerum",
-        definition=(
-            "Discrediting an idea or action by associating it with a group or "
-            "figure the audience already despises, rather than addressing "
-            "the idea on its merits (not limited to actual references to "
-            "Hitler or Nazis)."
-        ),
-        positive_examples=[
-            "This policy is exactly what dictators have always used to "
-            "control the population.",
-            "Only fascists have ever supported this kind of censorship.",
-            "That argument sounds like something straight out of a "
-            "totalitarian playbook.",
-        ],
-        negative_examples=[
-            "Historians compared the policy to similar measures adopted in "
-            "the 1930s, citing three peer-reviewed studies.",
         ],
     ),
 }
