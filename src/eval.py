@@ -1,10 +1,10 @@
-"""Rough evaluation of the extraction pipeline against the real labeled
-spans in oversimplification_data.csv (SemEval-derived propaganda-technique
+"""Rough evaluation of the two-step paragraph pipeline against the real
+labeled spans in oversimplification_data.csv (SemEval-derived propaganda
 annotations). This is a proof-of-concept sanity check, not a rigorous
-metric: each row's `span_text` is used directly as a short input, and we
-check whether the model flagged *any* extraction with the correct
-technique. The dataset has no explicit non-propaganda ("none") examples,
-so this only measures recall/technique-confusion, not false-positive rate.
+metric: each row's `span_text` is used directly as the "paragraph" input,
+and we check whether the model's Step 2 YES/NO for the gold technique came
+back YES. The dataset has no explicit non-propaganda ("none") examples, so
+this only measures recall/technique-confusion, not false-positive rate.
 """
 
 import csv
@@ -12,7 +12,7 @@ import random
 from pathlib import Path
 
 from .codebook import CSV_TECHNIQUE_TO_KEY
-from .prompting import ParseError, build_chat_messages, parse_extractions
+from .prompting import ParseError, build_chat_messages, parse_paragraph_result
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "oversimplification_data.csv"
 
@@ -47,7 +47,6 @@ def evaluate(generate_fn, examples: list[dict] | None = None, max_retries: int =
     correct = 0
     wrong_technique = 0
     missed = 0
-    false_positive_on_none = 0
     parse_failures = 0
     details = []
 
@@ -55,41 +54,33 @@ def evaluate(generate_fn, examples: list[dict] | None = None, max_retries: int =
         text, gold = ex["text"], ex["technique"]
         messages = build_chat_messages(text)
 
-        extractions = None
+        result = None
         last_err = None
         for _ in range(max_retries):
             raw = generate_fn(messages)
             try:
-                extractions = parse_extractions(raw)
+                result = parse_paragraph_result(raw)
                 break
             except ParseError as e:
                 last_err = e
                 continue
 
-        if extractions is None:
+        if result is None:
             parse_failures += 1
             details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"PARSE_FAIL: {last_err}"})
             continue
 
-        predicted_techniques = {e["technique"] for e in extractions}
+        present_techniques = {k for k, v in result["techniques"].items() if v["present"]}
 
-        if gold == "none":
-            if predicted_techniques:
-                false_positive_on_none += 1
-                details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"FALSE_POSITIVE: {predicted_techniques}"})
-            else:
-                correct += 1
-                details.append({"id": ex["id"], "text": text, "gold": gold, "result": "OK (correctly quiet)"})
+        if gold in present_techniques:
+            correct += 1
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": "OK"})
+        elif present_techniques:
+            wrong_technique += 1
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"WRONG_TECHNIQUE: {present_techniques}"})
         else:
-            if gold in predicted_techniques:
-                correct += 1
-                details.append({"id": ex["id"], "text": text, "gold": gold, "result": "OK"})
-            elif predicted_techniques:
-                wrong_technique += 1
-                details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"WRONG_TECHNIQUE: {predicted_techniques}"})
-            else:
-                missed += 1
-                details.append({"id": ex["id"], "text": text, "gold": gold, "result": "MISSED (no extraction)"})
+            missed += 1
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": "MISSED (all NO)"})
 
     n = len(examples)
     summary = {
@@ -97,7 +88,6 @@ def evaluate(generate_fn, examples: list[dict] | None = None, max_retries: int =
         "correct": correct,
         "wrong_technique": wrong_technique,
         "missed": missed,
-        "false_positive_on_none": false_positive_on_none,
         "parse_failures": parse_failures,
         "accuracy": correct / n if n else 0.0,
     }

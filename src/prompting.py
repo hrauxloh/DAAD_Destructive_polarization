@@ -1,6 +1,14 @@
-"""Prompt construction and output parsing for propaganda-technique
-extraction with an instruction-tuned LLM (designed for Llama 3.1 8B Instruct
-run locally via llama-cpp-python, but model-agnostic).
+"""Two-step prompt construction and output parsing for detecting
+complexity-erasing language features, per paragraph, with an
+instruction-tuned LLM (designed for Llama 3.1 8B Instruct run locally via
+llama-cpp-python, but model-agnostic).
+
+Mirrors the project's stereotyping methodology:
+  Step 1 - extract the discrete claims/assertions made in the paragraph.
+  Step 2 - for each technique, decide YES/NO whether the paragraph contains
+           a clear instance, applying the codebook's "distinction from X"
+           guardrails to avoid flagging surface patterns that don't actually
+           fit the definition.
 """
 
 import json
@@ -8,42 +16,54 @@ import re
 
 from .codebook import CODEBOOK, build_codebook_text
 
-VALID_KEYS = set(CODEBOOK.keys())
+VALID_KEYS = list(CODEBOOK.keys())
 
-SYSTEM_PROMPT = """You are an assistant helping researchers annotate news text \
-for specific propaganda techniques, for academic research on political \
-polarization. You are precise, conservative, and only flag text that clearly \
-matches one of the technique definitions below. If nothing in the text \
-matches, return an empty list.
+SYSTEM_PROMPT = """You are an assistant helping researchers analyze news text \
+for language features that erase complexity in public debate, for academic \
+research on political polarization. You are precise and conservative: only \
+answer YES when the paragraph clearly matches a technique's definition AND \
+none of its "distinction from X" guardrails apply. When in doubt, answer NO.
 
 TECHNIQUES:
 {codebook}
 
-OUTPUT FORMAT:
-Return ONLY a JSON array (no prose, no markdown fences) where each element is:
-{{"quote": "<exact substring from the input text>", \
-"technique": "<one of: {keys}>", \
-"confidence": <float between 0 and 1>, \
-"rationale": "<one short sentence>"}}
+You will be given ONE paragraph. Perform two steps:
 
-If no techniques are present, return an empty array: []
+STEP 1 - Claim extraction: identify the discrete claims, assertions, or \
+arguments made in the paragraph (short phrases, one per distinct claim).
+
+STEP 2 - Technique identification: for each of the four techniques above \
+(keys: {keys}), decide YES or NO whether the paragraph contains a clear \
+instance of it. If YES, quote the exact substring from the paragraph that \
+triggered it and give a one-sentence rationale that references which claim \
+from Step 1 it operates on and why the guardrails don't rule it out.
+
+OUTPUT FORMAT:
+Return ONLY a single JSON object (no prose, no markdown fences) shaped \
+exactly like this:
+{{
+  "claims": ["<claim 1>", "<claim 2>", ...],
+  "techniques": {{
+    "black_and_white": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
+    "causal_oversimplification": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
+    "thought_terminating_cliche": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
+    "reductio_ad_hitlerum": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}}
+  }}
+}}
 """
 
-USER_TEMPLATE = """Analyze the following news text and extract every span that \
-matches one of the propaganda techniques defined above.
-
-TEXT:
+USER_TEMPLATE = """PARAGRAPH:
 \"\"\"
 {text}
 \"\"\"
 
-JSON array:"""
+JSON object:"""
 
 
 def build_system_prompt() -> str:
     return SYSTEM_PROMPT.format(
         codebook=build_codebook_text(),
-        keys=", ".join(sorted(VALID_KEYS)),
+        keys=", ".join(VALID_KEYS),
     )
 
 
@@ -62,54 +82,53 @@ class ParseError(ValueError):
     pass
 
 
-def _extract_json_array(raw: str) -> str:
-    """Pull the first top-level JSON array out of a model response that may
+def _extract_json_object(raw: str) -> str:
+    """Pull the first top-level JSON object out of a model response that may
     contain surrounding prose or markdown code fences."""
     raw = raw.strip()
-    fence_match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", raw, re.DOTALL)
+    fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if fence_match:
         return fence_match.group(1)
-    start = raw.find("[")
-    end = raw.rfind("]")
+    start = raw.find("{")
+    end = raw.rfind("}")
     if start == -1 or end == -1 or end < start:
-        raise ParseError(f"No JSON array found in model output: {raw[:200]!r}")
+        raise ParseError(f"No JSON object found in model output: {raw[:200]!r}")
     return raw[start : end + 1]
 
 
-def parse_extractions(raw: str) -> list[dict]:
-    """Parse and validate the model's JSON output. Raises ParseError on
-    malformed structure so the caller can retry."""
-    candidate = _extract_json_array(raw)
+def parse_paragraph_result(raw: str) -> dict:
+    """Parse and validate the model's two-step JSON output. Raises
+    ParseError on malformed structure so the caller can retry."""
+    candidate = _extract_json_object(raw)
     try:
         data = json.loads(candidate)
     except json.JSONDecodeError as e:
         raise ParseError(f"Invalid JSON: {e}") from e
 
-    if not isinstance(data, list):
-        raise ParseError("Top-level JSON is not a list")
+    if not isinstance(data, dict):
+        raise ParseError("Top-level JSON is not an object")
 
-    cleaned = []
-    for item in data:
-        if not isinstance(item, dict):
-            raise ParseError(f"Array element is not an object: {item!r}")
-        quote = item.get("quote")
-        technique = item.get("technique")
-        if not isinstance(quote, str) or not quote.strip():
-            raise ParseError(f"Missing/empty 'quote' field: {item!r}")
-        if technique not in VALID_KEYS:
-            raise ParseError(f"Unknown technique key {technique!r}: {item!r}")
-        confidence = item.get("confidence", 0.5)
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError):
-            confidence = 0.5
-        confidence = max(0.0, min(1.0, confidence))
-        cleaned.append(
-            {
-                "quote": quote.strip(),
-                "technique": technique,
-                "confidence": confidence,
-                "rationale": item.get("rationale", ""),
-            }
-        )
-    return cleaned
+    claims = data.get("claims")
+    if not isinstance(claims, list):
+        raise ParseError(f"Missing/invalid 'claims' list: {data!r}")
+    claims = [str(c) for c in claims]
+
+    techniques_raw = data.get("techniques")
+    if not isinstance(techniques_raw, dict):
+        raise ParseError(f"Missing/invalid 'techniques' object: {data!r}")
+
+    techniques = {}
+    for key in VALID_KEYS:
+        entry = techniques_raw.get(key)
+        if not isinstance(entry, dict):
+            raise ParseError(f"Missing/invalid entry for technique {key!r}: {data!r}")
+        present = entry.get("present")
+        if not isinstance(present, bool):
+            raise ParseError(f"'present' for {key!r} is not a bool: {entry!r}")
+        techniques[key] = {
+            "present": present,
+            "quote": entry.get("quote") if present else None,
+            "rationale": entry.get("rationale") if present else None,
+        }
+
+    return {"claims": claims, "techniques": techniques}
