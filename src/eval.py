@@ -1,10 +1,12 @@
-"""Rough evaluation of the two-step paragraph pipeline against the real
+"""Rough evaluation of the two-step article-level pipeline against the real
 labeled spans in oversimplification_data.csv (SemEval-derived propaganda
 annotations). This is a proof-of-concept sanity check, not a rigorous
-metric: each row's `span_text` is used directly as the "paragraph" input,
-and we check whether the model's Step 2 YES/NO for the gold technique came
-back YES. The dataset has no explicit non-propaganda ("none") examples, so
-this only measures recall/technique-confusion, not false-positive rate.
+metric: each row's `span_text` is run through the full two-step pipeline as
+if it were a standalone "article", and we check whether any extracted
+instance names the gold technique. The dataset has no explicit
+non-propaganda ("none") examples, so this only measures recall/technique-
+confusion, not false-positive rate. Deprioritized relative to running the
+pipeline over real articles (see the notebook, section 8).
 """
 
 import csv
@@ -12,7 +14,7 @@ import random
 from pathlib import Path
 
 from .codebook import CSV_TECHNIQUE_TO_KEY
-from .prompting import ParseError, build_chat_messages, parse_paragraph_result
+from .prompting import ParseError, analyze_article
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "oversimplification_data.csv"
 
@@ -21,7 +23,8 @@ def load_labeled_examples(path: Path = DATA_PATH, sample_size: int | None = None
     """Load rows from oversimplification_data.csv, mapping each row's CSV
     technique label to the internal codebook key. Rows with an unrecognized
     technique label are skipped. Pass `sample_size` to randomly subsample
-    (useful since a local 8B model is slow, and the full file has ~390 rows)."""
+    (useful since a local 8B model is slow, and each example now costs 2
+    LLM calls)."""
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
@@ -52,35 +55,25 @@ def evaluate(generate_fn, examples: list[dict] | None = None, max_retries: int =
 
     for ex in examples:
         text, gold = ex["text"], ex["technique"]
-        messages = build_chat_messages(text)
 
-        result = None
-        last_err = None
-        for _ in range(max_retries):
-            raw = generate_fn(messages)
-            try:
-                result = parse_paragraph_result(raw)
-                break
-            except ParseError as e:
-                last_err = e
-                continue
-
-        if result is None:
+        try:
+            result = analyze_article(generate_fn, text, max_retries=max_retries)
+        except ParseError as e:
             parse_failures += 1
-            details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"PARSE_FAIL: {last_err}"})
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"PARSE_FAIL: {e}"})
             continue
 
-        present_techniques = {k for k, v in result["techniques"].items() if v["present"]}
+        found_techniques = {inst["technique"] for inst in result["instances"]}
 
-        if gold in present_techniques:
+        if gold in found_techniques:
             correct += 1
             details.append({"id": ex["id"], "text": text, "gold": gold, "result": "OK"})
-        elif present_techniques:
+        elif found_techniques:
             wrong_technique += 1
-            details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"WRONG_TECHNIQUE: {present_techniques}"})
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": f"WRONG_TECHNIQUE: {found_techniques}"})
         else:
             missed += 1
-            details.append({"id": ex["id"], "text": text, "gold": gold, "result": "MISSED (all NO)"})
+            details.append({"id": ex["id"], "text": text, "gold": gold, "result": "MISSED (no instances)"})
 
     n = len(examples)
     summary = {

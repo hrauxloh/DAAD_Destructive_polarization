@@ -5,66 +5,81 @@
 Detects 2 techniques that erase complexity in public debate (a subset of the
 SemEval / Da San Martino et al. propaganda taxonomy): `black_and_white`
 (dichotomous reasoning) and `thought_terminating_cliche`. Uses a **two-step,
-per-paragraph** prompt with Llama 3.1 8B Instruct run locally (no paid API)
+article-level** pipeline with Llama 3.1 8B Instruct run locally (no paid API)
 via `llama-cpp-python`, sized to run on a free-tier Google Colab T4 GPU.
 
-For each paragraph:
-1. **Claim extraction** — the model lists the discrete claims/assertions in it
-2. **Technique identification** — for each of the 2 techniques, YES/NO,
+For each article, two separate model calls:
+1. **Claim extraction (Step 1)** — read the whole article and list the
+   discrete claims/assertions it makes
+2. **Instance extraction (Step 2)** — given the article and the Step 1
+   claims, pull out every concrete instance of the 2 techniques anywhere in
+   the article: an exact quote, the claim it operates on, and a rationale,
    guided by explicit "distinction from X" rules in the codebook (e.g. a
    statement that rejects binary blame is NOT the black-and-white fallacy; a
-   short but substantive sentence is NOT a thought-terminating cliché)
+   short but substantive sentence is NOT a thought-terminating cliché). The
+   same technique can be reported more than once per article.
 
-This two-step, guardrailed design replaced an earlier flat free-text
-extraction prompt after it was observed to both under-flag isolated,
-decontextualized span fragments (near-zero recall) and over-flag ordinary
-prose in full articles (false positives from surface-pattern matching, e.g.
-tagging a mainstream scientific causal claim as "oversimplification").
+This design evolved from an earlier flat free-text extraction prompt (which
+under-flagged isolated span fragments and over-flagged ordinary prose) to a
+per-paragraph two-step YES/NO version, and now to this article-level,
+instance-extracting version so Step 1 sees the whole article's argument
+rather than one paragraph at a time, and Step 2 reports every match rather
+than a single yes/no per chunk.
 
 ### Data
 - `oversimplification_data.csv` — ~190 SemEval-derived spans labeled
   `Black-and-White_Fallacy` or `Thought-terminating_Cliches` (rows with other
   labels are skipped). No article full-text is included, so `start`/`end`
-  offsets aren't resolvable here; eval uses `span_text` directly as a
-  standalone "paragraph" — deprioritized for now per the two-step redesign,
-  see `src/eval.py`.
+  offsets aren't resolvable here; eval runs each `span_text` through the
+  pipeline as its own standalone "article" — deprioritized for now, see
+  `src/eval.py`.
 - `australia_498sample_climatechange.csv` — ~480 full news articles (not
   labeled for propaganda), the current priority target for running the
   extraction pipeline.
 - `aus_sample_preprocessing.R` — an R script that splits the climate-change
   corpus into per-sentence rows (a separate, sentence-level preprocessing
-  path; the Python pipeline in this repo uses paragraph-level splitting
-  instead, see `src/paragraphs.py`).
+  path not used by the current Python pipeline, which operates on whole
+  articles).
 
 ### Layout
 - `src/codebook.py` — technique definitions, "distinction from X" guardrails,
   few-shot examples, and the mapping from `oversimplification_data.csv`
   technique labels to internal keys
-- `src/prompting.py` — two-step prompt construction and JSON-output
-  parsing/validation
+- `src/prompting.py` — the two-step (claim extraction, then instance
+  extraction) prompt construction, JSON-output parsing/validation, and the
+  `analyze_article()` driver that runs both calls
 - `src/paragraphs.py` — splits article full-text into paragraph-sized chunks
+  (used by an earlier per-paragraph version of the pipeline; not used by the
+  current article-level notebook flow)
 - `src/eval.py` — loads `oversimplification_data.csv` and evaluates the
   pipeline against it
 - `notebooks/colab_propaganda_poc.ipynb` — the runnable Colab notebook (model
-  download, two-step pipeline, evaluation, and a per-paragraph run over the
-  climate-change corpus)
+  download, two-step pipeline, evaluation, and an article-level run over the
+  climate-change corpus, saving results to CSV)
 
 ### Running the PoC
 Open `notebooks/colab_propaganda_poc.ipynb` in Google Colab (`Runtime > Change
 runtime type > T4 GPU`) and run the cells top to bottom. It clones this repo
 (must be public, or you handle auth yourself), downloads a public GGUF
 conversion of Llama-3.1-8B-Instruct (no Hugging Face token required), and runs
-the two-step extraction pipeline.
+the two-step pipeline over each article. Section 8 saves `aus_claims.csv`
+(one row per article) and `aus_instances.csv` (one row per detected
+technique instance) and offers them for download.
 
 ### Known limitations
 - Currently scoped to 2 techniques by request (`black_and_white`,
   `thought_terminating_cliche`); `causal_oversimplification` and
   `reductio_ad_hitlerum` were previously covered and can be re-added to
   `src/codebook.py` if needed later.
+- Article text is truncated (`MAX_ARTICLE_CHARS` in the notebook) to fit the
+  model's context budget on a free T4, so instances in a truncated tail
+  won't be found.
+- Step 2 now has to scan a whole article and report every instance, a harder
+  task for an 8B model than a single paragraph YES/NO — check
+  `aus_instances.csv` for both missed and spurious instances before trusting
+  it at scale.
 - `oversimplification_data.csv` has no non-propaganda ("none") examples, so
   eval there only measures recall/technique-confusion, not false-positive
-  rate — full-article false positives need to be checked by reading section 8
-  output in the notebook.
+  rate.
 - An 8B quantized model is less reliable than a larger hosted model at strict
   JSON formatting and nuanced technique judgments.
-- Paragraph splitting is a simple heuristic and may over/under-segment.
