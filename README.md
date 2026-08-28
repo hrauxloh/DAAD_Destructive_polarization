@@ -2,19 +2,18 @@
 
 ## Complexity-erasing language detection proof of concept
 
-Detects 4 techniques that erase complexity in public debate (a subset of the
+Detects 2 techniques that erase complexity in public debate (a subset of the
 SemEval / Da San Martino et al. propaganda taxonomy): `black_and_white`
-(dichotomous reasoning), `causal_oversimplification`, `thought_terminating_cliche`,
-and `reductio_ad_hitlerum`. Uses a **two-step, per-paragraph** prompt with
-Llama 3.1 8B Instruct run locally (no paid API) via `llama-cpp-python`, sized
-to run on a free-tier Google Colab T4 GPU.
+(dichotomous reasoning) and `thought_terminating_cliche`. Uses a **two-step,
+per-paragraph** prompt with Llama 3.1 8B Instruct run locally (no paid API)
+via `llama-cpp-python`, sized to run on a free-tier Google Colab T4 GPU.
 
 For each paragraph:
 1. **Claim extraction** — the model lists the discrete claims/assertions in it
-2. **Technique identification** — for each of the 4 techniques, YES/NO,
-   guided by explicit "distinction from X" rules in the codebook (e.g. citing
-   a well-evidenced scientific cause is NOT causal oversimplification; a
-   statement that rejects binary blame is NOT the black-and-white fallacy)
+2. **Technique identification** — for each of the 2 techniques, YES/NO,
+   guided by explicit "distinction from X" rules in the codebook (e.g. a
+   statement that rejects binary blame is NOT the black-and-white fallacy; a
+   short but substantive sentence is NOT a thought-terminating cliché)
 
 This two-step, guardrailed design replaced an earlier flat free-text
 extraction prompt after it was observed to both under-flag isolated,
@@ -23,11 +22,12 @@ prose in full articles (false positives from surface-pattern matching, e.g.
 tagging a mainstream scientific causal claim as "oversimplification").
 
 ### Data
-- `oversimplification_data.csv` — ~390 SemEval-derived spans labeled with one
-  of 3 of the 4 techniques (no `reductio_ad_hitlerum` rows yet). No article
-  full-text is included, so `start`/`end` offsets aren't resolvable here; eval
-  uses `span_text` directly as a standalone "paragraph" — deprioritized for
-  now per the two-step redesign, see `src/eval.py`.
+- `oversimplification_data.csv` — ~190 SemEval-derived spans labeled
+  `Black-and-White_Fallacy` or `Thought-terminating_Cliches` (rows with other
+  labels are skipped). No article full-text is included, so `start`/`end`
+  offsets aren't resolvable here; eval uses `span_text` directly as a
+  standalone "paragraph" — deprioritized for now per the two-step redesign,
+  see `src/eval.py`.
 - `australia_498sample_climatechange.csv` — ~480 full news articles (not
   labeled for propaganda), the current priority target for running the
   extraction pipeline.
@@ -57,7 +57,10 @@ conversion of Llama-3.1-8B-Instruct (no Hugging Face token required), and runs
 the two-step extraction pipeline.
 
 ### Known limitations
-- Only 4 techniques are covered; only 3 have labeled validation data.
+- Currently scoped to 2 techniques by request (`black_and_white`,
+  `thought_terminating_cliche`); `causal_oversimplification` and
+  `reductio_ad_hitlerum` were previously covered and can be re-added to
+  `src/codebook.py` if needed later.
 - `oversimplification_data.csv` has no non-propaganda ("none") examples, so
   eval there only measures recall/technique-confusion, not false-positive
   rate — full-article false positives need to be checked by reading section 8

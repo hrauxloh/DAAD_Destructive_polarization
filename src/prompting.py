@@ -32,8 +32,8 @@ You will be given ONE paragraph. Perform two steps:
 STEP 1 - Claim extraction: identify the discrete claims, assertions, or \
 arguments made in the paragraph (short phrases, one per distinct claim).
 
-STEP 2 - Technique identification: for each of the four techniques above \
-(keys: {keys}), decide YES or NO whether the paragraph contains a clear \
+STEP 2 - Technique identification: for each of the {n_techniques} technique(s) \
+above (keys: {keys}), decide YES or NO whether the paragraph contains a clear \
 instance of it. If YES, quote the exact substring from the paragraph that \
 triggered it and give a one-sentence rationale that references which claim \
 from Step 1 it operates on and why the guardrails don't rule it out.
@@ -44,10 +44,7 @@ exactly like this:
 {{
   "claims": ["<claim 1>", "<claim 2>", ...],
   "techniques": {{
-    "black_and_white": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
-    "causal_oversimplification": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
-    "thought_terminating_cliche": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}},
-    "reductio_ad_hitlerum": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}}
+{techniques_schema}
   }}
 }}
 """
@@ -60,10 +57,20 @@ USER_TEMPLATE = """PARAGRAPH:
 JSON object:"""
 
 
+def _build_techniques_schema() -> str:
+    lines = [
+        f'    "{key}": {{"present": true|false, "quote": "<exact substring or null>", "rationale": "<one sentence or null>"}}'
+        for key in VALID_KEYS
+    ]
+    return ",\n".join(lines)
+
+
 def build_system_prompt() -> str:
     return SYSTEM_PROMPT.format(
         codebook=build_codebook_text(),
         keys=", ".join(VALID_KEYS),
+        n_techniques=len(VALID_KEYS),
+        techniques_schema=_build_techniques_schema(),
     )
 
 
