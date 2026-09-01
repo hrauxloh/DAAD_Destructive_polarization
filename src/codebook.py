@@ -1,14 +1,6 @@
 """Codebook for 2 "complexity-erasing" language features (a subset of the
 SemEval / Da San Martino et al. propaganda taxonomy), currently narrowed to
 black-and-white / dichotomous reasoning and thought-terminating clichés.
-Each entry follows the same style as the project's stereotyping codebook: a
-simplified definition plus explicit "distinction from X" guardrails against
-adjacent concepts, to keep the model from flagging surface patterns (a short
-sentence, a rejection of blame) that don't actually fit the definition.
-
-Definitions are paraphrased from:
-  Da San Martino et al., "Fine-Grained Analysis of Propaganda in News
-  Articles" (EMNLP 2019) / SemEval-2020 Task 11.
 """
 
 from dataclasses import dataclass, field
@@ -55,14 +47,9 @@ CODEBOOK: dict[str, Technique] = {
             "opposite of this technique, not an instance of it.",
         ],
         positive_examples=[
-            "Either you support this bill or you don't care about children.",
-            "There is no other choice: we must act now, exactly as proposed.",
-            "You're either a patriot or a traitor.",
-        ],
-        negative_examples=[
-            "Lawmakers debated several amendments before reaching a compromise.",
-            "There is no 'baddie' here, just outdated governance arrangements "
-            "that need to be reviewed.",
+            "There’s only two options he has to achieve this, and one is to massively cut the services that South Australians rely on from tje state government or to increase taxes.",
+            "We either stand squarely alongside the people of our democratic sister country of Israel, or we support those who want to wipe Israel from the map of the Middle East.",
+            "either replace non-dairy cattle or limit emissions",
         ],
     ),
     "thought_terminating_cliche": Technique(
@@ -75,20 +62,12 @@ CODEBOOK: dict[str, Technique] = {
             "substance."
         ),
         distinctions=[
-            "Distinction from ordinary concise language: brevity alone is "
-            "not the marker. The phrase must function to END discussion or "
-            "critical thought on something complex (e.g. 'it is what it "
-            "is', 'boys will be boys'), not simply be a short sentence that "
-            "conveys real information (e.g. 'the vote passed 54-46' is short "
-            "but is not a cliché-shutdown).",
-            "A routine announcement of a plan or policy focus area is not "
-            "this technique merely because it is brief or uses confident "
-            "phrasing — it must be a generic phrase that forecloses "
-            "further thought, not a substantive (if short) claim.",
+            "Distinction from ordinary concise language."
+            "The phrase must function to END discussion or critical thought."
         ],
         positive_examples=[
             "It is what it is.",
-            "Boys will be boys.",
+            "Let's not rest until we get this done.",
             "That's just the way things are, end of story.",
         ],
         negative_examples=[
