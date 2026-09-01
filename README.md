@@ -56,6 +56,20 @@ than a single yes/no per chunk.
 - `notebooks/colab_propaganda_poc.ipynb` — the runnable Colab notebook (model
   download, two-step pipeline, evaluation, and an article-level run over the
   climate-change corpus, saving results to CSV)
+- `src/readability.py` — standard readability metrics (Flesch-Kincaid Grade
+  Level, Flesch Reading Ease, Gunning Fog, Coleman-Liau, ARI) via the
+  well-established `textstat` package
+- `src/cohmetrix_lite.py` — an **open-source approximation** of a subset of
+  Coh-Metrix's cohesion/complexity indices (referential cohesion, connective
+  density by category, syntactic depth), computed with spaCy. **Not the
+  official Coh-Metrix tool** — see the module docstring for why (Coh-Metrix
+  has no public API/package, only a manual web form / desktop app) and
+  exactly what is/isn't approximated
+- `src/complexity_pipeline.py` — combines the two into one per-article
+  results table; no LLM or GPU needed
+- `notebooks/colab_complexity_pipeline.ipynb` — CPU-only Colab notebook that
+  runs the complexity pipeline over the full climate-change corpus and saves
+  `aus_complexity_scores.csv`
 
 ### Running the PoC
 Open `notebooks/colab_propaganda_poc.ipynb` in Google Colab (`Runtime > Change
@@ -83,3 +97,16 @@ technique instance) and offers them for download.
   rate.
 - An 8B quantized model is less reliable than a larger hosted model at strict
   JSON formatting and nuanced technique judgments.
+- `cohmetrix_lite` is a stand-in, not a validated equivalent to Coh-Metrix —
+  don't report its output as official Coh-Metrix scores. Flesch-Kincaid and
+  related formulas measure surface reading difficulty, not argumentative
+  complexity, so they answer a different question than the propaganda-
+  technique coding pipeline above.
+
+### Running the complexity pipeline
+Open `notebooks/colab_complexity_pipeline.ipynb` in Google Colab (no GPU
+needed — any runtime works) and run the cells top to bottom. It clones this
+repo, installs `textstat` and spaCy's small English model, runs both metric
+families over every article in `australia_498sample_climatechange.csv`
+(takes a few minutes for the full ~480 articles), and saves/downloads
+`aus_complexity_scores.csv` with one row per article.
