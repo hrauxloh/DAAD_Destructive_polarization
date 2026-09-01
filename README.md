@@ -104,9 +104,23 @@ technique instance) and offers them for download.
   technique coding pipeline above.
 
 ### Running the complexity pipeline
-Open `notebooks/colab_complexity_pipeline.ipynb` in Google Colab (no GPU
+**In Colab:** open `notebooks/colab_complexity_pipeline.ipynb` (no GPU
 needed — any runtime works) and run the cells top to bottom. It clones this
 repo, installs `textstat` and spaCy's small English model, runs both metric
 families over every article in `australia_498sample_climatechange.csv`
 (takes a few minutes for the full ~480 articles), and saves/downloads
 `aus_complexity_scores.csv` with one row per article.
+
+**Locally:** `scripts/run_complexity.py` does the same thing outside Colab.
+From the repo root:
+```
+pip install textstat spacy pandas nltk
+python -m spacy download en_core_web_sm
+python -c "import nltk; nltk.download('cmudict')"
+python scripts/run_complexity.py
+```
+This is CPU-only and lightweight (no LLM, no GPU) — tested locally at
+~0.4 sec/article, so the full corpus finishes in a few minutes on any
+machine. Output CSVs from either path (`aus_complexity_scores.csv`,
+`aus_claims.csv`, `aus_instances.csv`) are gitignored as generated
+artifacts, not committed to the repo.
