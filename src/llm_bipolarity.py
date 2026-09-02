@@ -41,18 +41,31 @@ notebooks/colab_propaganda_poc.ipynb for the model-loading setup).
 import json
 import re
 
+# DEFINITION = (
+#     "The collapse of a person's or group's plural, multidimensional identity "
+#     "and ideology into a single dimension -- such that a group's own "
+#     "identity is understood as opposed by everyone else, or political life "
+#     "is depicted as naturally and inescapably defined by exactly two "
+#     "overarching, opposing partisan camps. This often happens because one "
+#     "distinction (e.g. a single hot-button issue, or party label) becomes "
+#     "so prominent that it subsumes all other identity and ideological "
+#     "characteristics: people or groups are described/treated as if that one "
+#     "distinction is the only thing that defines them, absorbed into "
+#     "all-encompassing 'us' vs. 'them' identities rather than as people with "
+#     "many overlapping, sometimes cross-cutting views and affiliations."
+# )
+
 DEFINITION = (
-    "The collapse of a person's or group's plural, multidimensional identity "
-    "and ideology into a single dimension -- such that a group's own "
-    "identity is understood as opposed by everyone else, or political life "
-    "is depicted as naturally and inescapably defined by exactly two "
-    "overarching, opposing partisan camps. This often happens because one "
-    "distinction (e.g. a single hot-button issue, or party label) becomes "
-    "so prominent that it subsumes all other identity and ideological "
-    "characteristics: people or groups are described/treated as if that one "
-    "distinction is the only thing that defines them, absorbed into "
-    "all-encompassing 'us' vs. 'them' identities rather than as people with "
-    "many overlapping, sometimes cross-cutting views and affiliations."
+  "The description of topics, groups, parties or issues as unidimensional"
+  "and/or being to the exclusion of all others, resulting in us vs. them dynamics"
+  "and identities rather than as people with many overlapping,"
+  "sometimes cross-cutting views and affiliations."
+  "This often happens because one distinction"
+  "(e.g. a single hot-button issue, or party label) becomes so prominent"
+  "that it subsumes all other identity and ideological characteristics."
+  "This includes the implicit exclusion of other positions or identities
+  "through statements of being the sole holder or legitimacy, moral authority or feasibility."
+  
 )
 
 DISTINCTIONS = [
@@ -60,31 +73,16 @@ DISTINCTIONS = [
     "two-party/two-option institutional fact (e.g. 'the vote passed or "
     "failed', 'the two major parties are X and Y'): that is NOT this "
     "pattern by itself. It becomes this pattern only if the text ALSO "
-    "treats that binary as exhaustive of who the people/groups involved "
-    "ARE -- collapsing their full identity into that one axis -- rather "
-    "than just describing the binary choice or institution itself.",
+    "treats that binary as exhaustive of who the people/groups involved."
     "Distinction from ordinary balanced reporting that quotes two opposing "
     "viewpoints on ONE issue: presenting two sides of a specific debate is "
     "NOT erasure of complexity unless the article implies those two "
     "camps also define the people/groups more broadly (their whole "
     "identity, character, or worth), not just their opinion on that issue.",
-    "A KEY POSITIVE PATTERN to watch for: citing a stark, attention-"
-    "grabbing statistic or claim about partisan division (e.g. 'X% of "
-    "group A would never do Y with group B') as if it simply proves the "
-    "two sides are totally, naturally opposed -- WITHOUT giving the "
-    "surrounding context or nuance that would complicate that picture. "
-    "Presenting such a statistic without any qualifying context IS an "
-    "instance of this pattern.",
     "The mirror image is a guardrail, not an instance: if the text DOES "
     "provide the nuancing context around such a statistic or claim (e.g. "
     "'but a closer look shows...', noting exceptions, overlap, or "
-    "cross-cutting cases), that is the OPPOSITE of erasure -- actively "
-    "resisting the collapse into two camps -- not an example of it.",
-    "Distinction from text that explicitly acknowledges non-binary "
-    "complexity (more than two camps, multi-party dynamics, cross-cutting "
-    "identities, internal disagreement within a group): that is NOT this "
-    "pattern, since the whole point of the pattern is falsely treating a "
-    "complex, plural reality as if it were simply and naturally bipolar.",
+    "cross-cutting cases), that is the OPPOSITE of erasure."
 ]
 
 SYSTEM_PROMPT = """You are an assistant helping researchers analyze news \
@@ -93,18 +91,13 @@ are precise and conservative: only report an instance when the text \
 clearly matches the definition below AND none of the guardrails apply. \
 When in doubt, don't report it.
 
-CONCEPT: Erasure of complexities (collapse into bipolar/us-vs-them framing)
-Definition: {definition}
+CONCEPT:{definition}
 
 GUARDRAILS:
 {distinctions}
 
 You will be given a full news article. Find every instance anywhere in \
-the article where it erases complexity in this specific sense -- \
-collapsing plural, multidimensional identity/ideology into a single, \
-seemingly natural and inescapable two-camp antagonism, or citing a stark \
-partisan-division statistic/claim without complicating context -- \
-matching the definition above. For each instance, quote the exact \
+the article that matches the definiton. For each instance, quote the exact \
 substring from the article that triggered it and give a one-sentence \
 rationale explaining why the guardrails don't rule it out. The same \
 pattern may appear more than once; report every distinct instance.
