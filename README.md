@@ -124,3 +124,39 @@ This is CPU-only and lightweight (no LLM, no GPU) — tested locally at
 machine. Output CSVs from either path (`aus_complexity_scores.csv`,
 `aus_claims.csv`, `aus_instances.csv`) are gitignored as generated
 artifacts, not committed to the repo.
+
+## Bipolarity metrics (branch: `claude/bipolarity-metrics`)
+
+Three simple, automated, CPU-only proxies for how much an article frames an
+issue as strictly two opposing sides (`src/bipolarity.py`), no LLM needed:
+
+1. **`dichotomy_marker_density`** — keyword/pattern density of explicit
+   binary-framing language (`either...or`, `vs`, `two sides`, ...). Cheapest,
+   most transparent, but only catches explicit phrasing. In a pilot run on
+   the first 20 articles of the climate corpus, this was **0 for every
+   article** — explicit binary phrasing is rare in this corpus, which is an
+   informative limitation of the metric, not a bug.
+2. **`entity_sentiment_gap`** — finds the two most-mentioned named entities
+   in an article, scores the sentiment of sentences mentioning each (VADER,
+   lexicon-based), and reports the gap between them. A large gap suggests
+   the article frames the two most-discussed actors as opposing poles, even
+   without explicit binary language. Requires at least 2 distinct named
+   entities to produce a value.
+3. **`antonym_cooccurrence_density`** — density of WordNet antonym pairs
+   both appearing in the article (e.g. "safe"/"dangerous") per 1000 words.
+   Can occasionally surface a spurious pair from an uncommon word sense
+   (no word-sense disambiguation) — check `antonym_pairs_sample` before
+   trusting a high score.
+
+None of these three has been validated against human bipolarity judgments —
+treat them as exploratory signals to compare against each other and against
+the LLM-based `black_and_white` detection, not as ground truth. In the pilot
+run, `entity_sentiment_gap` and `antonym_cooccurrence_density` showed a
+moderate positive correlation (~0.49); `dichotomy_marker_density` couldn't
+be compared (zero variance).
+
+**Running the pilot:** open `notebooks/colab_bipolarity_pilot.ipynb` in
+Colab (no GPU needed) and run top to bottom — it clones the
+`claude/bipolarity-metrics` branch, installs spaCy + NLTK data, runs all
+three metrics on the first 20 articles, and prints a correlation matrix and
+per-metric top-5 ranking for comparison.
