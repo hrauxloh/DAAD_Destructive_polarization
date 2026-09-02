@@ -63,7 +63,7 @@ DEFINITION = (
   "This often happens because one distinction"
   "(e.g. a single hot-button issue, or party label) becomes so prominent"
   "that it subsumes all other identity and ideological characteristics."
-  "This includes the implicit exclusion of other positions or identities
+  "This includes the implicit exclusion of other positions or identities"
   "through statements of being the sole holder or legitimacy, moral authority or feasibility."
   
 )
