@@ -1,12 +1,37 @@
-"""LLM-based detection of dichotomy / mutually exclusive positions in a
-full article -- a single-call, article-level companion to the three
-non-LLM proxies in src/bipolarity.py, so all four approaches can be
-compared on the same articles.
+"""LLM-based detection of "erasure of complexities" -- the collapse of
+plural, multidimensional political/social identity into a single,
+seemingly natural and inescapable two-camp antagonism -- in a full
+article. A single-call, article-level companion to the three non-LLM
+proxies in src/bipolarity.py, so all four approaches can be compared on
+the same articles.
 
-Reuses the `black_and_white` technique definition and "distinction from X"
-guardrails already established in src/codebook.py -- "a complex issue
-presented as only two possible/mutually exclusive positions" is exactly
-what that entry defines -- rather than duplicating the definition.
+This is a DIFFERENT, more theoretically specific construct than the
+`black_and_white` SemEval-style logical fallacy in src/codebook.py (which
+is about presenting only two OPTIONS on a specific issue). The definition
+here is deliberately kept separate rather than reusing/editing
+src/codebook.py, and is based on the following theoretical account of
+destructive polarization (paraphrased in the prompt below):
+
+  In communicating with others, individuals normally navigate a complex
+  social landscape with multiple, cross-cutting identities and ideologies.
+  "Erasure of complexities" is the process by which this plurality gets
+  amalgamated into a SINGLE dimension: a group's own identity comes to be
+  understood as opposed by everyone else, or political life comes to be
+  seen as naturally and inescapably defined by exactly two overarching,
+  opposing partisan camps. This can happen because one distinction becomes
+  so prominent it subsumes all other identity/ideological characteristics
+  -- groups start identifying each other exclusively by the one trait that
+  makes them different, absorbed into all-encompassing "us" and "them"
+  identities. A specific, concrete manifestation: citing a stark,
+  attention-grabbing statistic or claim about partisan division as if it
+  proves the two sides are simply, naturally, totally opposed, WITHOUT the
+  surrounding nuance/context that would show the real picture is more
+  mixed. This is distinct from ordinary reporting of an actual two-choice
+  situation, from balanced reporting that quotes two opposing views on one
+  issue, and from describing a real two-party political system -- none of
+  those are erasure unless the text also treats that binary as exhaustive
+  of who the people/groups involved ARE, not just what they think about
+  one issue.
 
 Unlike src/bipolarity.py, this is NOT CPU-only: it requires an LLM (this
 project uses Llama 3.1 8B Instruct via llama-cpp-python -- see
@@ -16,27 +41,73 @@ notebooks/colab_propaganda_poc.ipynb for the model-loading setup).
 import json
 import re
 
-from .codebook import CODEBOOK
+DEFINITION = (
+    "The collapse of a person's or group's plural, multidimensional identity "
+    "and ideology into a single dimension -- such that a group's own "
+    "identity is understood as opposed by everyone else, or political life "
+    "is depicted as naturally and inescapably defined by exactly two "
+    "overarching, opposing partisan camps. This often happens because one "
+    "distinction (e.g. a single hot-button issue, or party label) becomes "
+    "so prominent that it subsumes all other identity and ideological "
+    "characteristics: people or groups are described/treated as if that one "
+    "distinction is the only thing that defines them, absorbed into "
+    "all-encompassing 'us' vs. 'them' identities rather than as people with "
+    "many overlapping, sometimes cross-cutting views and affiliations."
+)
 
-_TECHNIQUE = CODEBOOK["black_and_white"]
+DISTINCTIONS = [
+    "Distinction from reporting a real two-choice situation or an actual "
+    "two-party/two-option institutional fact (e.g. 'the vote passed or "
+    "failed', 'the two major parties are X and Y'): that is NOT this "
+    "pattern by itself. It becomes this pattern only if the text ALSO "
+    "treats that binary as exhaustive of who the people/groups involved "
+    "ARE -- collapsing their full identity into that one axis -- rather "
+    "than just describing the binary choice or institution itself.",
+    "Distinction from ordinary balanced reporting that quotes two opposing "
+    "viewpoints on ONE issue: presenting two sides of a specific debate is "
+    "NOT erasure of complexity unless the article implies those two "
+    "camps also define the people/groups more broadly (their whole "
+    "identity, character, or worth), not just their opinion on that issue.",
+    "A KEY POSITIVE PATTERN to watch for: citing a stark, attention-"
+    "grabbing statistic or claim about partisan division (e.g. 'X% of "
+    "group A would never do Y with group B') as if it simply proves the "
+    "two sides are totally, naturally opposed -- WITHOUT giving the "
+    "surrounding context or nuance that would complicate that picture. "
+    "Presenting such a statistic without any qualifying context IS an "
+    "instance of this pattern.",
+    "The mirror image is a guardrail, not an instance: if the text DOES "
+    "provide the nuancing context around such a statistic or claim (e.g. "
+    "'but a closer look shows...', noting exceptions, overlap, or "
+    "cross-cutting cases), that is the OPPOSITE of erasure -- actively "
+    "resisting the collapse into two camps -- not an example of it.",
+    "Distinction from text that explicitly acknowledges non-binary "
+    "complexity (more than two camps, multi-party dynamics, cross-cutting "
+    "identities, internal disagreement within a group): that is NOT this "
+    "pattern, since the whole point of the pattern is falsely treating a "
+    "complex, plural reality as if it were simply and naturally bipolar.",
+]
 
 SYSTEM_PROMPT = """You are an assistant helping researchers analyze news \
-articles for academic research on political polarization. You are precise \
-and conservative: only report an instance when the text clearly matches \
-the definition below AND none of its "distinction from X" guardrails \
-apply. When in doubt, don't report it.
+articles for academic research on destructive political polarization. You \
+are precise and conservative: only report an instance when the text \
+clearly matches the definition below AND none of the guardrails apply. \
+When in doubt, don't report it.
 
-CONCEPT: {name}
+CONCEPT: Erasure of complexities (collapse into bipolar/us-vs-them framing)
 Definition: {definition}
+
+GUARDRAILS:
 {distinctions}
 
 You will be given a full news article. Find every instance anywhere in \
-the article where it presents an issue as a dichotomy -- only two \
-possible or mutually exclusive positions/outcomes -- matching the \
-definition above. For each instance, quote the exact substring from the \
-article that triggered it and give a one-sentence rationale explaining \
-why the guardrails don't rule it out. The same pattern may appear more \
-than once; report every distinct instance.
+the article where it erases complexity in this specific sense -- \
+collapsing plural, multidimensional identity/ideology into a single, \
+seemingly natural and inescapable two-camp antagonism, or citing a stark \
+partisan-division statistic/claim without complicating context -- \
+matching the definition above. For each instance, quote the exact \
+substring from the article that triggered it and give a one-sentence \
+rationale explaining why the guardrails don't rule it out. The same \
+pattern may appear more than once; report every distinct instance.
 
 OUTPUT FORMAT:
 Return ONLY a single JSON object (no prose, no markdown fences) shaped \
@@ -58,12 +129,8 @@ JSON object:"""
 
 
 def _build_system_prompt() -> str:
-    distinctions = "\n".join(f"- {d}" for d in _TECHNIQUE.distinctions)
-    return SYSTEM_PROMPT.format(
-        name=_TECHNIQUE.name,
-        definition=_TECHNIQUE.definition,
-        distinctions=distinctions,
-    )
+    distinctions = "\n".join(f"- {d}" for d in DISTINCTIONS)
+    return SYSTEM_PROMPT.format(definition=DEFINITION, distinctions=distinctions)
 
 
 def build_dichotomy_messages(article_text: str) -> list[dict[str, str]]:

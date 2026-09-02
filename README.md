@@ -150,11 +150,20 @@ strictly two opposing/mutually-exclusive sides. Three are CPU-only proxies
    (no word-sense disambiguation) — check `antonym_pairs_sample` before
    trusting a high score.
 4. **`llm_dichotomy_density`** (`src/llm_bipolarity.py`) — Llama-3.1-8B-
-   Instruct is asked directly to find every instance where the article
-   presents an issue as a dichotomy, reusing the same `black_and_white`
-   definition and guardrails as the main propaganda-detection pipeline
-   (`src/codebook.py`). One LLM call per article — the only one of the
-   four that costs GPU time / Colab compute credits.
+   Instruct is asked to find every instance of **"erasure of
+   complexities"**: the collapse of plural, multidimensional political/
+   social identity into a single, seemingly natural and inescapable
+   two-camp antagonism — not just "two options on an issue," but a group's
+   whole identity being reduced to one axis of opposition, or a stark
+   partisan-division statistic being cited as if it proves total, natural
+   opposition without the nuancing context that would complicate it. This
+   is a deliberately different, more theoretically specific construct than
+   the SemEval `black_and_white` fallacy used in the main propaganda
+   pipeline (`src/codebook.py`) — the definition and guardrails are kept
+   separate in `src/llm_bipolarity.py` rather than edited into
+   `src/codebook.py`. See that module's docstring for the full theoretical
+   grounding. One LLM call per article — the only one of the four that
+   costs GPU time / Colab compute credits.
 
 None of these four has been validated against human bipolarity judgments —
 treat them as exploratory signals to compare against each other, not as
