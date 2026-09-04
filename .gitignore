@@ -7,3 +7,4 @@ venv/
 aus_complexity_scores.csv
 aus_claims.csv
 aus_instances.csv
+complexity_by_publisher.png

@@ -124,3 +124,19 @@ This is CPU-only and lightweight (no LLM, no GPU) — tested locally at
 machine. Output CSVs from either path (`aus_complexity_scores.csv`,
 `aus_claims.csv`, `aus_instances.csv`) are gitignored as generated
 artifacts, not committed to the repo.
+
+**Plotting the results:** once `aus_complexity_scores.csv` exists (from
+either path above), run:
+```
+pip install matplotlib
+python scripts/plot_complexity.py
+```
+This produces `complexity_by_publisher.png` — a grid of strip plots (one
+per complexity index), each article a point colored/shaped by publisher
+(top 7 by article count shown individually, the rest grouped as "Other"),
+with a black tick marking each publisher's median. Axes are scaled to the
+1st–99th percentile per index so a rare degenerate article (e.g. a
+sentence-splitting failure inflating a readability score) doesn't compress
+the rest of the distribution into an unreadable band — such outliers still
+plot, just clipped at the axis edge, and the figure caption reports how
+many were clipped.
